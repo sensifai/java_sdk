@@ -19,6 +19,19 @@ public class SensifaiApi {
     ArrayList<File> FilesUploads;
     private URL url = new URL("https://api.sensifai.com/api/");
 
+//    public static void main(String[] args) {
+//        try {
+//            SensifaiApi api = new SensifaiApi("62FA4C6D126743DABD31FD2E92F2F344");
+//            ArrayList<String> files = new ArrayList<>();
+//            files.add("https://img.rasset.ie/0012296d-500.jpg");
+//            files.add("https://www.whitehouse.gov/wp-content/uploads/2017/12/44_barack_obama1.jpg");
+//            files.add("https://images.immediate.co.uk/production/volatile/sites/7/2016/07/GettyImages-481614053-484c86d.jpg");
+//            JSONObject jsonObject = api.uploadByUrl(files);
+//            System.out.print(jsonObject.toString());
+//        } catch (Exception e) {
+//            e.printStackTrace();
+//        }
+//    }
 
     public SensifaiApi(String token) throws Exception {
 
@@ -33,8 +46,8 @@ public class SensifaiApi {
 
     }
 
-    public JSONObject upload_by_url(List<String> urls) {
-        JSONObject Jresponse = null;
+    public JSONObject uploadByUrl(List<String> urls) {
+        JSONObject jResponse = null;
 
         try {
 
@@ -49,7 +62,7 @@ public class SensifaiApi {
             data.put("token", this.token);
 
             JSONObject payload = new JSONObject();
-            payload.put("query", "mutation( $token: String!, $urls: [String]! ){uploadByUrl( token: $token, urls: $urls){result error taskIdList{file taskId}}}");
+            payload.put("query", "mutation( $token: String!, $urls: [String]! ){uploadByUrl( token: $token, urls: $urls){result error succeed{file taskId}}}");
             payload.put("variables", data);
 
             OkHttpClient client = new OkHttpClient();
@@ -59,94 +72,79 @@ public class SensifaiApi {
 
             Response response = client.newCall(request).execute();
             String Sresponse = response.body().string();
-            Jresponse = new JSONObject(Sresponse);
+            jResponse = new JSONObject(Sresponse);
 
         } catch (Exception e) {
             e.printStackTrace();
         }
 
-        return Jresponse;
+        return jResponse;
 
     }
 
-    public Response get_result(String task_id) {
-        Response response = null;
-        try {
+    public void map(int Files) throws JSONException {
+        String curIndex = String.valueOf(Files - 1);
 
-            JSONObject data = new JSONObject();
-            data.put("taskId", task_id);
+        JSONArray varMap = new JSONArray();
+        varMap.put("variables.files." + curIndex);
 
-            JSONObject payload = new JSONObject();
-            payload.put("query", "query( $taskId: String! ){apiResult( taskId: $taskId){ ...on ImageResult{isDone errors imageResults{nsfwResult{type probability value}logoResult{description}landmarkResult{description}taggingResult{label probability}faceResult{detectedBoxesPercentage probability detectedFace label}}} ... on VideoResult{fps duration isDone framesCount errors videoResults{startSecond endSecond startFrame endFrame thumbnailPath taggingResult{label probability}actionResult{label probability}celebrityResult{name frequency} sportResult{label probability}nsfwResult{probability type value}}}}}");
-            payload.put("variables", data);
-
-            OkHttpClient client = new OkHttpClient();
-            RequestBody body = RequestBody.create(MediaType.parse("application/json"), payload.toString());
-
-            Request request = new Request.Builder().url(url).post(body).build();
-
-            response = client.newCall(request).execute();
-
-
-        } catch (JSONException e) {
-            e.printStackTrace();
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-        return response;
+        map.putOpt(curIndex, varMap);
     }
 
-    public void map(File file, int Files) throws JSONException {
-        String curindex = String.valueOf(Files - 1);
+    public JSONObject uploadByFile(ArrayList<File> FilesUploads) throws JSONException, IOException {
+        Response response;
+        JSONObject responseObject;
 
-        JSONArray varmap = new JSONArray();
-        varmap.put("variables.files." + curindex);
+        MultipartBody.Builder requestBodyBuilder = new MultipartBody.Builder().setType(MultipartBody.FORM);
 
-        map.putOpt(curindex, varmap);
-    }
-
-    public Response upload_by_file(ArrayList<File> FilesUploads) {
-        Response response = null;
-        try {
-
-            MultipartBody.Builder requestBodyBuilder = new MultipartBody.Builder().setType(MultipartBody.FORM);
-
-            JSONObject var = new JSONObject();
-            for (File file :
-                    FilesUploads) {
-                map(file, FilesUploads.size());
-                requestBodyBuilder.addFormDataPart(String.valueOf(FilesUploads.indexOf(file)),
-                        file.getPath(),
-                        RequestBody.create(MultipartBody.FORM, file));
-            }
-
-            JSONArray array = new JSONArray();
+        JSONObject var = new JSONObject();
+        JSONArray array = new JSONArray();
+        for (int i = 0; i < FilesUploads.size(); i++) {
+            File file = FilesUploads.get(i);
+            map(i + 1);
+            requestBodyBuilder.addFormDataPart(String.valueOf(i),
+                    file.getPath(),
+                    RequestBody.create(MultipartBody.FORM, file));
             array.put(JSONObject.NULL);
-            var.putOpt("files", array);
-            var.putOpt("token", token);
-
-            JSONObject payload = new JSONObject();
-            payload.putOpt("query", "mutation($files: [Upload!]!, $token :String!) { uploadByFile(files: $files, token:$token ) { error result taskIdList{file taskId} cannotUpload} }");
-            payload.putOpt("variables", var);
-
-            requestBodyBuilder.addFormDataPart("operations", payload.toString())
-                    .addFormDataPart("map", map.toString());
-
-
-            OkHttpClient client = new OkHttpClient();
-
-            Request request = new Request.Builder().url(url).post(requestBodyBuilder.build()).build();
-            response = client.newCall(request).execute();
-
-
-        } catch (Exception e) {
-            e.printStackTrace();
-
         }
 
-        return response;
+        var.putOpt("files", array);
+        var.putOpt("token", token);
+
+        JSONObject payload = new JSONObject();
+        payload.putOpt("query", "mutation($files: [Upload!]!, $token :String!) { uploadByFile(files: $files, token:$token ) { error result succeed{file taskId} cannotUpload} }");
+        payload.putOpt("variables", var);
+
+        requestBodyBuilder.addFormDataPart("operations", payload.toString())
+                .addFormDataPart("map", map.toString());
+
+
+        OkHttpClient client = new OkHttpClient();
+
+        Request request = new Request.Builder().url(url).post(requestBodyBuilder.build()).build();
+        response = client.newCall(request).execute();
+        responseObject = new JSONObject(response.body().string());
+
+        return responseObject;
     }
 
+    public JSONObject getResult(String task_id) throws JSONException, IOException {
+        Response response = null;
+        JSONObject responseObject;
+        JSONObject data = new JSONObject();
+        data.put("taskId", task_id);
+
+        JSONObject payload = new JSONObject();
+        payload.put("query", "query( $taskId: String! ){apiResult( taskId: $taskId){ ...on ImageResult{isDone errors imageResults{nsfwResult{type probability value}logoResult{description}landmarkResult{description}taggingResult{label probability}faceResult{detectedBoxesPercentage probability detectedFace label}}} ... on VideoResult{fps duration isDone framesCount errors videoResults{startSecond endSecond startFrame endFrame thumbnailPath taggingResult{label probability}actionResult{label probability}celebrityResult{name frequency} sportResult{label probability}nsfwResult{probability type value}}}}}");
+        payload.put("variables", data);
+
+        OkHttpClient client = new OkHttpClient();
+        RequestBody body = RequestBody.create(MediaType.parse("application/json"), payload.toString());
+
+        Request request = new Request.Builder().url(url).post(body).build();
+
+        response = client.newCall(request).execute();
+        responseObject = new JSONObject(response.body().string());
+        return responseObject;
+    }
 }
-
-
